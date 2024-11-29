@@ -1,0 +1,4 @@
+{
+  "description": "Lunch at restaurant",
+  "amount": 15.00
+}

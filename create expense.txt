@@ -1,0 +1,5 @@
+{
+  "description": "Lunch",
+  "amount": 12.50,
+  "date": "2024-11-30T12:00:00Z"
+}

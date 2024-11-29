@@ -1,0 +1,139 @@
+const AWS = require('aws-sdk');
+const dynamoDB = new AWS.DynamoDB.DocumentClient();
+const tableName = process.env.EXPENSE_TABLE;
+
+exports.handler = async (event) => {
+    const httpMethod = event.httpMethod;
+    const pathParameters = event.pathParameters || {};
+    const body = JSON.parse(event.body || '{}');
+    let response;
+
+    try {
+        if (httpMethod === 'POST') {
+            // Create new expense
+            response = await createExpense(body);
+        } else if (httpMethod === 'GET' && pathParameters.id) {
+            // Get expense by ID
+            response = await getExpense(pathParameters.id);
+        } else if (httpMethod === 'GET') {
+            // Get all expenses
+            response = await getAllExpenses();
+        } else if (httpMethod === 'PUT' && pathParameters.id) {
+            // Update an existing expense
+            response = await updateExpense(pathParameters.id, body);
+        } else if (httpMethod === 'DELETE' && pathParameters.id) {
+            // Delete an expense
+            response = await deleteExpense(pathParameters.id);
+        } else {
+            response = {
+                statusCode: 400,
+                body: JSON.stringify({ message: 'Invalid HTTP Method or path' }),
+            };
+        }
+    } catch (error) {
+        response = {
+            statusCode: 500,
+            body: JSON.stringify({ message: 'Internal Server Error', error: error.message }),
+        };
+    }
+
+    return response;
+};
+
+// Create expense
+async function createExpense(expense) {
+    const params = {
+        TableName: tableName,
+        Item: {
+            id: generateUUID(),
+            description: expense.description,
+            amount: expense.amount,
+            date: expense.date || new Date().toISOString(),
+        },
+    };
+
+    await dynamoDB.put(params).promise();
+
+    return {
+        statusCode: 201,
+        body: JSON.stringify({ message: 'Expense created', expense: params.Item }),
+    };
+}
+
+// Get expense by ID
+async function getExpense(id) {
+    const params = {
+        TableName: tableName,
+        Key: { id },
+    };
+
+    const result = await dynamoDB.get(params).promise();
+
+    if (!result.Item) {
+        return {
+            statusCode: 404,
+            body: JSON.stringify({ message: 'Expense not found' }),
+        };
+    }
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ expense: result.Item }),
+    };
+}
+
+// Get all expenses
+async function getAllExpenses() {
+    const params = {
+        TableName: tableName,
+    };
+
+    const result = await dynamoDB.scan(params).promise();
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ expenses: result.Items }),
+    };
+}
+
+// Update expense
+async function updateExpense(id, updatedData) {
+    const params = {
+        TableName: tableName,
+        Key: { id },
+        UpdateExpression: 'set description = :desc, amount = :amt, date = :date',
+        ExpressionAttributeValues: {
+            ':desc': updatedData.description,
+            ':amt': updatedData.amount,
+            ':date': updatedData.date || new Date().toISOString(),
+        },
+        ReturnValues: 'ALL_NEW',
+    };
+
+    const result = await dynamoDB.update(params).promise();
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Expense updated', expense: result.Attributes }),
+    };
+}
+
+// Delete expense
+async function deleteExpense(id) {
+    const params = {
+        TableName: tableName,
+        Key: { id },
+    };
+
+    await dynamoDB.delete(params).promise();
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Expense deleted' }),
+    };
+}
+
+// Generate unique ID (simple UUID generator)
+function generateUUID() {
+    return Math.floor(Math.random() * Date.now()).toString(36);
+}
